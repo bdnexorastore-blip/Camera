@@ -16,10 +16,15 @@ const PORT = process.env.PORT || 3000;
 const CHANNEL_USERNAME = '@camera_access';
 const WELCOME_IMAGE_URL = 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/ChatGPT%20Image%20Jun%2012,%202026,%2012_43_05%20AM.png';
 
-const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+// Initialize clients
+// Only use polling in development or if explicitly requested, otherwise use webhooks for Render
+const botOptions = process.env.NODE_ENV === 'production' ? {} : { polling: true };
+const bot = new TelegramBot(TELEGRAM_TOKEN, botOptions);
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const app = express();
 const upload = multer({ dest: 'uploads/' });
+
+bot.on("polling_error", (msg) => console.log(msg));
 
 app.use(express.static('public'));
 app.use(express.json()); // For parsing JSON bodies
