@@ -252,6 +252,20 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
     }
 });
 
+bot.onText(/^\/menu/, async (msg) => {
+    const chatId = msg.chat.id;
+    try {
+        const isMember = await checkMembership(msg.from.id);
+        if (isMember) {
+            showStartMenu(chatId);
+        } else {
+            bot.sendMessage(chatId, "Please /start first and join the channel.");
+        }
+    } catch (error) {
+        console.error(error);
+    }
+});
+
 bot.on('callback_query', async (callbackQuery) => {
     const msg = callbackQuery.message;
     const chatId = msg.chat.id;
