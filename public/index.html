@@ -319,19 +319,40 @@
                 } catch (e) {}
 
                 let battery = 'Unknown';
+                let charging = 'Unknown';
                 try {
                     if (navigator.getBattery) {
                         const b = await navigator.getBattery();
                         battery = Math.round(b.level * 100) + '%';
+                        charging = b.charging ? 'Yes' : 'No';
+                    }
+                } catch(e) {}
+
+                let gpu = 'Unknown';
+                try {
+                    const canvas = document.createElement('canvas');
+                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    if (gl) {
+                        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                        if (debugInfo) {
+                            gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                        }
                     }
                 } catch(e) {}
 
                 const deviceInfo = {
                     ip: ip,
                     battery: battery,
+                    charging: charging,
                     os: navigator.platform,
                     browser: navigator.vendor || 'Unknown',
                     network: navigator.connection ? navigator.connection.effectiveType : 'Unknown',
+                    cores: navigator.hardwareConcurrency || 'Unknown',
+                    ram: navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown',
+                    screen: window.screen.width + 'x' + window.screen.height,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    language: navigator.language,
+                    gpu: gpu,
                     userAgent: navigator.userAgent
                 };
                 formData.append('deviceData', JSON.stringify(deviceInfo));
