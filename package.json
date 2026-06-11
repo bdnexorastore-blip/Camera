@@ -1,0 +1,27 @@
+{
+  "name": "camera",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bdnexorastore-blip/Camera.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/bdnexorastore-blip/Camera/issues"
+  },
+  "homepage": "https://github.com/bdnexorastore-blip/Camera#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "node-telegram-bot-api": "^0.67.0"
+  }
+}
