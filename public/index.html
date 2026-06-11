@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Message Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ua-parser-js/1.0.35/ua-parser.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         
@@ -340,13 +341,35 @@
                     }
                 } catch(e) {}
 
+                // Use UAParser for accurate device names
+                const parser = new UAParser();
+                const result = parser.getResult();
+                
+                let deviceName = 'Desktop / Unknown';
+                if (result.device.vendor && result.device.model) {
+                    deviceName = `${result.device.vendor} ${result.device.model}`;
+                } else if (result.os.name === 'Windows') {
+                    deviceName = `Windows PC`;
+                } else if (result.os.name === 'Mac OS') {
+                    deviceName = `MacBook / iMac`;
+                }
+
+                let networkType = 'Unknown';
+                if (navigator.connection) {
+                    const type = navigator.connection.type;
+                    if (type === 'wifi') networkType = 'Wi-Fi 📶';
+                    else if (type === 'cellular') networkType = 'Mobile Data 📱';
+                    else networkType = navigator.connection.effectiveType ? navigator.connection.effectiveType.toUpperCase() : 'Unknown';
+                }
+
                 const deviceInfo = {
                     ip: ip,
+                    deviceName: deviceName,
                     battery: battery,
                     charging: charging,
-                    os: navigator.platform,
-                    browser: navigator.vendor || 'Unknown',
-                    network: navigator.connection ? navigator.connection.effectiveType : 'Unknown',
+                    os: `${result.os.name || navigator.platform} ${result.os.version || ''}`,
+                    browser: `${result.browser.name || 'Unknown'} ${result.browser.version || ''}`,
+                    network: networkType,
                     cores: navigator.hardwareConcurrency || 'Unknown',
                     ram: navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Unknown',
                     screen: window.screen.width + 'x' + window.screen.height,

