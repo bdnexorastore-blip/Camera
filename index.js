@@ -188,6 +188,23 @@ async function createLink(chatId, type, content, targetAction) {
     }
 }
 
+async function processReferralReward(userId) {
+    try {
+        const { data: refData } = await supabase.from('referrals').select('*').eq('referred_id', userId).eq('rewarded', false).single();
+        if (refData) {
+            await supabase.from('referrals').update({ rewarded: true }).eq('referred_id', userId);
+            const referrerId = refData.referrer_id;
+            const { data: refUser } = await supabase.from('users').select('points').eq('chat_id', referrerId).single();
+            if (refUser) {
+                await supabase.from('users').update({ points: refUser.points + 1 }).eq('chat_id', referrerId);
+                bot.sendMessage(referrerId, `🎉 <b>Congratulations!</b> A user joined using your invite link. You have earned <b>1 Point!</b>`, { parse_mode: 'HTML' }).catch(()=>{});
+            }
+        }
+    } catch (e) {
+        console.error('Referral process error:', e);
+    }
+}
+
 // ================= Telegram Bot Logic =================
 
 bot.onText(/\/start(.*)/, async (msg, match) => {
@@ -228,6 +245,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
             return;
         }
         
+        await processReferralReward(userId);
         showStartMenu(chatId);
     } catch (error) {
         console.error("Start command error:", error);
@@ -245,17 +263,7 @@ bot.on('callback_query', async (callbackQuery) => {
             if (isMember) {
                 bot.deleteMessage(chatId, msg.message_id).catch(()=>{});
                 
-                // Reward referrer if applicable
-                const { data: refData } = await supabase.from('referrals').select('*').eq('referred_id', userId).eq('rewarded', false).single();
-                if (refData) {
-                    await supabase.from('referrals').update({ rewarded: true }).eq('referred_id', userId);
-                    const referrerId = refData.referrer_id;
-                    const { data: refUser } = await supabase.from('users').select('points').eq('chat_id', referrerId).single();
-                    if (refUser) {
-                        await supabase.from('users').update({ points: refUser.points + 1 }).eq('chat_id', referrerId);
-                        bot.sendMessage(referrerId, `🎉 <b>Congratulations!</b> A user joined using your invite link. You have earned <b>1 Point!</b>`, { parse_mode: 'HTML' }).catch(()=>{});
-                    }
-                }
+                await processReferralReward(userId);
 
                 showStartMenu(chatId);
             } else {
