@@ -17,8 +17,8 @@ const CHANNEL_USERNAME = '@camera_access';
 const WELCOME_IMAGE_URL = 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/ChatGPT%20Image%20Jun%2012,%202026,%2012_43_05%20AM.png';
 
 // Initialize clients
-// Only use polling in development or if explicitly requested, otherwise use webhooks for Render
-const botOptions = process.env.NODE_ENV === 'production' ? {} : { polling: true };
+// Force polling to be true so the bot works on Render without webhook setup
+const botOptions = { polling: true };
 const bot = new TelegramBot(TELEGRAM_TOKEN, botOptions);
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const app = express();
